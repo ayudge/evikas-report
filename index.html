@@ -143,23 +143,22 @@
       body { margin: 0; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
       .report-page {
         width: var(--report-width);
-        height: var(--report-height);
         min-height: 0;
         margin: 0;
         border: 0;
         padding: 6mm 1mm 2mm 1mm;
-        overflow: hidden;
-        break-after: avoid;
-        break-inside: avoid;
-        page-break-after: avoid;
-        page-break-inside: avoid;
+        overflow: visible;
       }
       h1 { margin-bottom: 7mm; }
       .top-line { margin-bottom: 9mm; }
       .village-line { margin-bottom: 3mm; }
       table { border: 2px solid #000; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr { break-inside: auto; page-break-inside: auto; }
       th { height: 12mm; background: #fafafa; }
-      td { min-height: 17mm; height: 17mm; }
+      td { min-height: 17mm; height: auto; }
+      .survey-box, .area-box { break-inside: avoid; page-break-inside: avoid; }
       th, td { border-color: #000; }
       .signature-section {
         margin-top: 3mm;
@@ -202,14 +201,9 @@
       <span class="patwari-entry"><label>पटवारी :</label><input id="patwariName" class="patwari-name" type="text" placeholder="नाम" /></span>
     </section>
 
-    <section class="village-line"><label>ग्राम :</label><input class="village-name" type="text" placeholder="ग्राम नाम" /></section>
+    <div class="screen-only controls"><button id="addVillage" type="button">नया ग्राम जोड़े</button><button id="addRow" type="button">नया आवेदक जोड़े</button><button id="printReport" type="button">प्रिंट करें</button></div>
 
-    <div class="screen-only controls"><button id="addRow" type="button">नया आवेदक जोड़े</button><button id="printReport" type="button">प्रिंट करें</button></div>
-
-    <table id="reportTable">
-      <thead><tr><th class="col-serial">क्र.</th><th class="col-name">आवेदक का नाम</th><th class="col-count">कुल<br>आवेदित<br>सर्वे नं</th><th class="col-survey">सर्वे नं विवरण</th><th class="col-area">रकबा विवरण<br>(हे.)</th><th class="col-reason">आवेदन का कारण</th><th class="col-status">सत्‍यापित/<br>असत्‍यापित</th><th class="col-comment">टिप्‍पणी</th><th class="col-delete screen-only">हटाएं</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <section id="villageReports" class="village-reports"></section>
 
     <div class="screen-only signature-upload"><label class="upload-label" for="signatureInput">हस्‍ताक्षर इमेज अपलोड करें</label><input id="signatureInput" class="hidden-file" type="file" accept="image/*" /></div>
     <section class="signature-section">
@@ -224,8 +218,9 @@
 
   <script>
     const reasons = ['फार्मर आई.डी. ना हाेना','ई-विकास पोर्टल पर संपूर्ण भूमि जानकारी नहीं आने से','मृतक किसान के वारिसों में से किसी एक द्वारा प्रतिनिधि के तौर पर','शामिल खाते में से किसी एक द्वारा सभी की सहमति से प्रतिनिधि के तौर पर','सिकमी किसान द्वारा असली भू-स्‍वामी की सहमति से','भू-स्‍वामी के चलने-फिरने में अक्षम हाेने की दशा में प्रतिनिधि द्वारा','अन्‍य कारण'];
-    const tbody = document.querySelector('#reportTable tbody');
+    const villageReports = document.querySelector('#villageReports');
     const makeOption = text => `<option>${text}</option>`;
+    const tableHead = '<thead><tr><th class="col-serial">क्र.</th><th class="col-name">आवेदक का नाम</th><th class="col-count">कुल<br>आवेदित<br>सर्वे नं</th><th class="col-survey">सर्वे नं विवरण</th><th class="col-area">रकबा विवरण<br>(हे.)</th><th class="col-reason">आवेदन का कारण</th><th class="col-status">सत्‍यापित/<br>असत्‍यापित</th><th class="col-comment">टिप्‍पणी</th><th class="col-delete screen-only">हटाएं</th></tr></thead>';
 
     function renderSurveyFields(row, count) {
       const surveyCell = row.querySelector('.survey-fields');
@@ -239,15 +234,30 @@
       }
     }
 
-    function renumberRows() { [...tbody.rows].forEach((row, index) => row.querySelector('.serial').textContent = `${index + 1}.`); }
+    function renumberRows(tbody) { [...tbody.rows].forEach((row, index) => row.querySelector('.serial').textContent = `${index + 1}.`); }
 
-    function addApplicantRow() {
+    function getActiveVillageSection() {
+      return villageReports.lastElementChild || addVillageSection();
+    }
+
+    function addApplicantRow(villageSection = getActiveVillageSection()) {
+      const tbody = villageSection.querySelector('tbody');
       const row = tbody.insertRow();
       row.innerHTML = `<td class="serial"></td><td><textarea class="table-textarea" placeholder="आवेदक का नाम लिखें"></textarea></td><td><input class="table-input count-input" type="number" min="1" value="1" placeholder="कुल सर्वे" /></td><td class="survey-fields"></td><td class="area-fields"></td><td><select class="table-select reason-select"><option value="">कारण चुनें</option>${reasons.map(makeOption).join('')}</select></td><td><select class="table-select"><option>सत्‍यापित</option><option>असत्‍यापित</option></select></td><td><textarea class="table-textarea" placeholder="टिप्‍पणी लिखें"></textarea></td><td class="delete-cell screen-only"><button type="button" class="delete-row">हटाएं</button></td>`;
       row.querySelector('.count-input').addEventListener('input', e => renderSurveyFields(row, e.target.value));
-      row.querySelector('.delete-row').addEventListener('click', () => { row.remove(); renumberRows(); });
+      row.querySelector('.delete-row').addEventListener('click', () => { row.remove(); renumberRows(tbody); });
       renderSurveyFields(row, 1);
-      renumberRows();
+      renumberRows(tbody);
+    }
+
+    function addVillageSection() {
+      const villageSection = document.createElement('section');
+      villageSection.className = 'village-report';
+      villageSection.innerHTML = `<section class="village-line"><label>ग्राम :</label><input class="village-name" type="text" placeholder="ग्राम नाम" /><button type="button" class="delete-village screen-only">हटाए</button></section><table class="report-table">${tableHead}<tbody></tbody></table>`;
+      villageSection.querySelector('.delete-village').addEventListener('click', () => villageSection.remove());
+      villageReports.appendChild(villageSection);
+      addApplicantRow(villageSection);
+      return villageSection;
     }
 
     function updateFooter() {
@@ -257,14 +267,15 @@
       dateTime.textContent = new Date().toLocaleString('hi-IN', { day:'numeric', month:'numeric', year:'numeric', hour:'numeric', minute:'numeric', second:'numeric', hour12:true });
     }
 
-    addRow.addEventListener('click', addApplicantRow);
+    addVillage.addEventListener('click', addVillageSection);
+    addRow.addEventListener('click', () => addApplicantRow());
     printReport.addEventListener('click', () => { updateFooter(); window.print(); });
     [halkaName, halkaNumber, patwariName].forEach(input => input.addEventListener('input', updateFooter));
     signatureInput.addEventListener('change', event => {
       const file = event.target.files[0];
       if (file) signaturePreview.src = URL.createObjectURL(file);
     });
-    addApplicantRow();
+    addVillageSection();
     updateFooter();
     setInterval(updateFooter, 1000);
   </script>
